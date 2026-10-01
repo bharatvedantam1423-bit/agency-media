@@ -2,6 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 /* Layout: sticky control bar, tab rail, one working column of sections that scan like a trading desk. */
 :root {
@@ -146,6 +147,8 @@ td.n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .spark span { width: 10px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .8; }
 .spark span.prev { background: var(--muted); opacity: .35; }
 
+.rep-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.rep-pre { margin: 0; background: var(--chip); border-radius: 8px; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 12px; max-height: 46vh; overflow: auto; }
 dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--ink); max-width: min(920px, calc(100vw - 24px)); width: 100%; padding: 0; }
 dialog::backdrop { background: rgba(10, 12, 25, .45); }
 .dlg-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); gap: 10px; }
@@ -176,6 +179,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
       <button id="w1095" aria-pressed="true" data-days="1095">All time</button>
     </div>
     <button class="btn" id="refresh" type="button">Refresh</button>
+    <button class="btn primary" id="reportBtn" type="button" disabled>Report for AI</button>
     <span class="pill" id="state"><span class="dot"></span><span id="stateText">Loading…</span></span>
   </div>
   <nav class="tabs" role="tablist" aria-label="Sections">
@@ -271,6 +275,18 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
   </section>
 </main>
 
+<dialog id="rep"><div class="dlg-head"><h3>Report for AI</h3><button class="btn" id="repClose" type="button">Close</button></div>
+  <div class="dlg-body">
+    <p class="lede" style="margin-top:0">One file with the highlights, winning patterns, templates, hot topics and reference posts for the selected time window. Give it to any AI and ask it to write content from it. Markdown is the best format for AI. The PDF is plain text with Latin characters only.</p>
+    <div class="rep-actions">
+      <button class="btn primary" id="repMd" type="button">Save as Markdown (.md)</button>
+      <button class="btn" id="repPdf" type="button">Save as PDF</button>
+      <button class="btn" id="repCopy" type="button">Copy text</button>
+      <span class="msg" id="repMsg" role="status"></span>
+    </div>
+    <pre class="rep-pre" id="repPre"></pre>
+  </div></dialog>
+
 <dialog id="dlg"><div class="dlg-head"><h3 id="dlgTitle"></h3><button class="btn" id="dlgClose" type="button">Close</button></div><div class="dlg-body" id="dlgBody"></div></dialog>
 
 <script>
@@ -330,7 +346,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
     length: { short: "Keep it under 20 words.", medium: "20–60 words.", long: "60–150 words; use line breaks.", very_long: "150+ words; structure with a list." },
   };
 
-  const S = { days: 1095, data: null, mode: "loading", mcp: null, db: null, user: null, isOwner: false, tab: "overview", accStatus: "watch" };
+  const S = { days: 1095, data: null, mode: "loading", mcp: null, db: null, user: null, isOwner: false, dl: null, report: "", tab: "overview", accStatus: "watch" };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const lab = (dim, v) => (LABELS[dim] && LABELS[dim][v]) || String(v ?? "").replace(/_/g, " ");
@@ -479,9 +495,9 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
       const vals = (pats[dim] || []).filter((v) => v.posts >= 5 && v.lift != null);
       if (!vals.length) continue;
       const best = vals[0];
-      if (best.lift >= 1.25 && best.winners >= 2) out.push({ up: true, dim, v: best, score: (best.lift - 1) * Math.log(1 + best.posts), text: `<b>${esc(lab(dim, best.value))}</b> posts become winners <b>${best.lift.toFixed(1)}×</b> as often as average.`, meta: `${name} · ${best.winners} winners out of ${best.posts} posts` });
+      if (best.lift >= 1.25 && best.winners >= 2) out.push({ up: true, dim, name, plain: `${name}: ${lab(dim, best.value)} posts become winners ${best.lift.toFixed(1)}x as often as average`, v: best, score: (best.lift - 1) * Math.log(1 + best.posts), text: `<b>${esc(lab(dim, best.value))}</b> posts become winners <b>${best.lift.toFixed(1)}×</b> as often as average.`, meta: `${name} · ${best.winners} winners out of ${best.posts} posts` });
       const worst = vals[vals.length - 1];
-      if (worst !== best && worst.lift <= 0.7 && worst.posts >= 8) out.push({ up: false, dim, v: worst, score: (1 - worst.lift) * Math.log(1 + worst.posts) * 0.8, text: `<b>${esc(lab(dim, worst.value))}</b> posts underperform: only <b>${worst.lift.toFixed(1)}×</b> the average win rate.`, meta: `${name} · ${worst.winners} winners out of ${worst.posts} posts` });
+      if (worst !== best && worst.lift <= 0.7 && worst.posts >= 8) out.push({ up: false, dim, name, plain: `${name}: ${lab(dim, worst.value)} posts underperform, only ${worst.lift.toFixed(1)}x the average win rate`, v: worst, score: (1 - worst.lift) * Math.log(1 + worst.posts) * 0.8, text: `<b>${esc(lab(dim, worst.value))}</b> posts underperform: only <b>${worst.lift.toFixed(1)}×</b> the average win rate.`, meta: `${name} · ${worst.winners} winners out of ${worst.posts} posts` });
     }
     return out.sort((a, b) => b.score - a.score).slice(0, 8);
   }
@@ -503,6 +519,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
     $("rising").innerHTML = (d.rising || []).length ? d.rising.map((p) => card(p, { early: true })).join("") : `<p class="empty">Nothing rising right now. X only shares each account's older top posts publicly, so this fills mostly from Bluesky, Mastodon, YouTube and Instagram.</p>`;
     wireCards($("rising"));
 
+    $("reportBtn").disabled = false;
     renderDims(d); renderRecipes(d); renderTopics(d); renderPosts(d); renderAccounts(d); renderHealth(d);
   }
 
@@ -622,7 +639,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
     const steps = [
       [true, "<b>Database and collectors are running.</b> X, Instagram and Contra are checked one account a minute from the database (Contra Discover every 30 minutes); Bluesky, Mastodon and YouTube every 10 minutes."],
       [collectOk, "<b>First posts collected.</b> " + (collectOk ? "Last collection " + ago(s.last_collect) + "." : "Waiting for the first scheduled run.")],
-      [s.tagged > 0, "<b>Laya is reading posts.</b> " + (s.tagged > 0 ? `${fmt(s.tagged)} read, ${fmt(s.untagged)} waiting. Last run ${ago(s.last_tag)}.` : `${fmt(s.untagged)} posts are waiting. Add the three secrets to the agency-media GitHub repo and run the "Laya tagging" workflow once. It then runs every 3 hours for free.`)],
+      [s.tagged > 0, "<b>Laya is reading posts.</b> " + (s.tagged > 0 ? `${fmt(s.tagged)} read, ${fmt(s.untagged)} waiting. Last run ${ago(s.last_tag)}.` : `${fmt(s.untagged)} posts are waiting. Add the LAYA_WORKER_TOKEN secret to the agency-media GitHub repo and run the "Laya tagging" workflow once. It then runs every 3 hours for free.`)],
       [s.discovered_watch > 0, "<b>System is finding new accounts.</b> " + (s.discovered_watch > 0 ? `${fmt(s.discovered_watch)} discovered accounts promoted to the watchlist.` : `${fmt(s.accounts_candidate)} suggestions being checked. Promising ones get promoted automatically.`)],
     ];
     $("steps").innerHTML = steps.map(([done, t]) => `<li class="${done ? "done" : ""}">${t}</li>`).join("");
@@ -660,6 +677,215 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
     if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
   }
   $("dlgClose").addEventListener("click", () => { const dlg = $("dlg"); if (dlg.close) dlg.close(); else dlg.removeAttribute("open"); });
+
+  // ---------- Report for AI ----------
+  const WINDOW_LABEL = { 30: "last 30 days", 90: "last 90 days", 1095: "all time (up to 3 years)" };
+  const num = (n) => n == null ? "n/a" : Number(n).toLocaleString("en-US");
+  const one = (t) => String(t ?? "").replace(/\s+/g, " ").trim();
+  const cell = (t) => one(t).replace(/\|/g, "/") || "-";
+  const dayStr = (t) => t ? new Date(t).toISOString().slice(0, 10) : "unknown";
+
+  function buildReport(d) {
+    const s = d.summary || {};
+    const win = WINDOW_LABEL[d.window_days] || WINDOW_LABEL[S.days] || "selected window";
+
+    // Reference posts get stable labels [P1], [P2]... in order of importance.
+    const refs = new Map();
+    const addRef = (p) => { if (p && p.id && !refs.has(p.id)) refs.set(p.id, p); };
+    (d.top_posts || []).forEach(addRef);
+    (d.rising || []).forEach(addRef);
+    Object.values(d.examples || {}).forEach(addRef);
+    const ids = [...refs.keys()];
+    const tag = (id) => { const i = ids.indexOf(id); return i < 0 ? null : "[P" + (i + 1) + "]"; };
+    const tags = (list, n = 3) => (list || []).slice(0, n).map(tag).filter(Boolean).join(" ");
+
+    const L = [];
+    const out = (...x) => L.push(...x);
+
+    out(`# Agency Signal report: ${win}`, "",
+      `Generated ${dayStr(d.generated_at || Date.now())} (UTC) by the Agency Signal dashboard. Subject: what design agencies, studios, freelance designers and business owners post on social media, and which posts beat their own account's normal results.`, "");
+
+    out("## How to use this report (instructions for an AI)", "",
+      "You are given market research on what works for design agencies and design-related business owners on social media. If you are asked to create content from it:", "",
+      "1. Treat the Key findings and Winning patterns as evidence of what works, and the Reference posts as examples to learn structure from.",
+      "2. Use the Playbook templates as post structures. Fill them with the user's own work, clients and real numbers. Never invent results.",
+      "3. Do not copy reference posts. Borrow the hook, structure and angle, never the wording or the facts.",
+      "4. Respect confidence. Anything marked \"early signal\" rests on fewer than 20 posts, so present it as a hunch.",
+      "5. When you explain why an idea should work, cite the reference post labels, for example [P3].", "");
+
+    out("## Scope", "",
+      "Only design agencies, studios, freelance designers and business owners who sell design, branding, web or creative services are included. Software companies, tool makers, template shops, media and inspiration accounts are excluded. A language model (Laya) reads each discovered account's bio and recent posts and classifies it before it is counted.", "",
+      `- Accounts counted: ${num(s.accounts_watch)} watched, of which ${num(s.discovered_watch)} were found by the system.`,
+      `- Window: ${win}.`, "");
+
+    out("## Key numbers", "",
+      `- Posts in window: ${num(s.posts)}`,
+      `- Winners (posts with at least 2x their own account's usual engagement): ${num(s.winners)}`,
+      `- Share of scored posts that are winners: ${s.base_win_rate != null ? (s.base_win_rate * 100).toFixed(0) + "%" : "n/a"}`,
+      `- Posts read by Laya (purpose, hook, subject, specificity and voice tags): ${num(s.tagged)}`, "");
+    const plats = d.platforms || [];
+    if (plats.length) {
+      out("| Platform | Posts | Winners | Accounts |", "|---|---|---|---|");
+      plats.forEach((p) => out(`| ${cell(lab("platform", p.platform))} | ${num(p.posts)} | ${num(p.winners)} | ${num(p.accounts)} |`));
+      out("");
+    }
+
+    out("## Key findings", "");
+    const ins = insightsFrom(d);
+    if (ins.length) {
+      ins.forEach((i) => {
+        const ex = tags(i.v.examples, 2);
+        out(`- ${i.plain} (${i.v.winners} winners from ${i.v.posts} posts${i.v.posts < 20 ? ", early signal" : ""}).${ex ? " Examples: " + ex : ""}`);
+      });
+    } else out("Not enough scored posts yet to state findings.");
+    out("");
+
+    out("## Winning patterns by trait", "",
+      "Win rate is the share of posts with that trait that became winners. Lift compares it with the average post (1.0x is average). Median outlier is the typical engagement as a multiple of the account's usual.", "");
+    for (const [dim, name, q] of DIMS) {
+      const vals = (d.patterns || {})[dim] || [];
+      if (!vals.length) continue;
+      out(`### ${name}`, "", /[.?]$/.test(q) ? q : q + ".", "", "| Value | Posts | Winners | Win rate | Lift | Median outlier |", "|---|---|---|---|---|---|");
+      vals.forEach((v) => out(`| ${cell(lab(dim, v.value))}${v.posts < 20 ? " (early signal)" : ""} | ${v.posts} | ${v.winners} | ${v.win_rate != null ? (v.win_rate * 100).toFixed(0) + "%" : "n/a"} | ${v.lift != null ? v.lift.toFixed(1) + "x" : "n/a"} | ${v.median_outlier != null ? v.median_outlier.toFixed(1) + "x" : "n/a"} |`));
+      out("");
+    }
+
+    out("## Playbook: trait pairs that win together", "");
+    const combos = (d.combos || []).filter((c) => c.lift >= 1.1);
+    if (combos.length) {
+      combos.forEach((c) => {
+        out(`### ${lab(c.a, c.va)} + ${lab(c.b, c.vb)}`, "",
+          `${c.lift.toFixed(1)}x the average win rate, ${c.winners} winners from ${c.posts} posts${c.posts < 20 ? " (early signal)" : ""}.`, "",
+          "Template:", "", "```", templateFor(c.a, c.va, c.b, c.vb), "```", "");
+        const ex = tags(c.examples, 3);
+        if (ex) out(`Examples: ${ex}`, "");
+      });
+    } else out("No trait pair has enough winners yet.", "");
+
+    out("## Hot topics this week", "",
+      "Topics and hashtags appearing more this week than their weekly average over the three weeks before.", "");
+    const topics = d.hot_topics || [];
+    if (topics.length) {
+      topics.forEach((t) => {
+        const ex = tags(t.examples, 3);
+        out(`- **${one(t.term)}**: ${t.growth.toFixed(1)}x growth, ${t.posts_now} posts this week versus ${(t.posts_prev / 3).toFixed(1)} per week before. Platforms: ${(t.platforms || []).map((x) => lab("platform", x)).join(", ") || "n/a"}.${ex ? " Examples: " + ex : ""}`);
+      });
+    } else out("No topic has enough fresh posts yet.");
+    out("");
+
+    out("## Rising in the last 36 hours", "");
+    const rising = d.rising || [];
+    if (rising.length) rising.forEach((p) => out(`- ${tag(p.id)} ${one(p.name || p.handle)} (@${one(p.handle)}) on ${lab("platform", p.platform)}, ${Number(p.early_outlier || p.outlier || 0).toFixed(1)}x usual so far: ${one(p.text).slice(0, 140)}${one(p.text).length > 140 ? "..." : ""}`));
+    else out("Nothing is rising right now.");
+    out("");
+
+    out("## Reference posts", "",
+      "Real posts that beat their account's normal results, with the traits that were measured. Learn the structure, do not copy the wording.", "");
+    ids.forEach((id, i) => {
+      const p = refs.get(id);
+      const traits = [
+        p.hook && "Hook: " + lab("hook", p.hook), p.purpose && "Purpose: " + lab("purpose", p.purpose),
+        p.subject && "Subject: " + lab("subject", p.subject), p.format && "Format: " + lab("format", p.format),
+        p.cta != null && "Call to action: " + (p.cta ? "yes" : "no"),
+        p.specificity != null && "Specificity: " + (p.specificity >= 1.5 ? "specific" : "vague"),
+        p.slop != null && "Voice: " + (p.slop >= 0.6 ? "sounds AI-written" : "sounds human"),
+      ].filter(Boolean).join(" | ");
+      out(`### P${i + 1}: ${one(p.name || p.handle)} (@${one(p.handle)}) on ${lab("platform", p.platform)}${p.outlier ? ", " + Number(p.outlier).toFixed(1) + "x usual engagement" : ""}`, "",
+        `- URL: ${p.url || "n/a"}`,
+        `- Posted: ${dayStr(p.posted_at)}`,
+        `- Engagement: ${num(p.likes)} likes, ${num(p.reposts)} reposts, ${num(p.replies)} replies${p.views ? ", " + num(p.views) + " views" : ""}`,
+        traits ? `- Traits: ${traits}` : "- Traits: not read yet", "",
+        ...String(p.text || "").split("\n").map((ln) => "> " + ln), "");
+    });
+
+    out("## Accounts counted", "", "| Platform | Handle | Name | Type (Laya) | Followers | Usual engagement | Found by |", "|---|---|---|---|---|---|---|");
+    (d.accounts || []).filter((a) => a.status === "watch").slice(0, 120).forEach((a) =>
+      out(`| ${cell(lab("platform", a.platform))} | @${cell(a.handle)} | ${cell(a.name)} | ${cell(a.kind)} | ${num(a.followers)} | ${num(a.median)} | ${a.origin === "discovered" ? "system" : "you"} |`));
+    out("");
+
+    out("## Method and limits", "",
+      "- A winner is a post with at least 2x its own account's median engagement (and at least 5 engagements). Comparing each account with itself lets a small studio's hit count as much as a large account's.",
+      "- Engagement is likes plus reposts, replies and saves, weighted; for YouTube and Instagram views count too.",
+      "- Traits marked with Laya (purpose, subject, specificity, voice) come from a language model and can be wrong on individual posts. Patterns are only as good as the sample size in each row.",
+      "- X only shares each account's roughly 100 top posts publicly, so X results lean toward older evergreen posts. Instagram, Bluesky, Mastodon and YouTube are more current.",
+      "- This is correlation in public posts. Use it to generate hypotheses to test, not guarantees.", "");
+
+    return L.join("\n");
+  }
+
+  const latin = (t) => String(t)
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-")
+    .replace(/…/g, "...").replace(/×/g, "x").replace(/→/g, "->")
+    .replace(/[^\n\x20-\x7e -ÿ]+/g, "?");
+
+  function buildPdf(text) {
+    const J = window.jspdf && window.jspdf.jsPDF;
+    if (!J) return null;
+    const doc = new J({ unit: "pt", format: "a4" });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48, maxW = W - 2 * M;
+    let y = M;
+    const put = (str, size, font, style, indent, gray, after) => {
+      doc.setFont(font, style); doc.setFontSize(size); doc.setTextColor(gray);
+      for (const ln of doc.splitTextToSize(str, maxW - indent)) {
+        if (y + size > H - M) { doc.addPage(); y = M; }
+        doc.text(ln, M + indent, y); y += size * 1.35;
+      }
+      y += after;
+    };
+    let code = false;
+    for (const raw of latin(text).split("\n")) {
+      if (raw.startsWith("```")) { code = !code; y += 2; continue; }
+      const line = raw.replace(/\*\*/g, "");
+      if (code) put(line || " ", 8.5, "courier", "normal", 12, 70, 0);
+      else if (!line.trim()) y += 5;
+      else if (line.startsWith("# ")) put(line.slice(2), 20, "helvetica", "bold", 0, 20, 8);
+      else if (line.startsWith("## ")) { y += 8; put(line.slice(3), 14, "helvetica", "bold", 0, 20, 4); }
+      else if (line.startsWith("### ")) { y += 4; put(line.slice(4), 11, "helvetica", "bold", 0, 30, 2); }
+      else if (line.startsWith("> ")) put(line.slice(2), 9.5, "helvetica", "italic", 14, 80, 0);
+      else if (/^\|[\s:|-]+\|$/.test(line)) continue;
+      else if (line.startsWith("|")) put(line.replace(/^\||\|$/g, "").split("|").map((c) => c.trim()).join("  |  "), 8.5, "helvetica", "normal", 0, 40, 0);
+      else put(line, 9.5, "helvetica", "normal", /^(- |\d+\. )/.test(line) ? 8 : 0, 25, 1);
+    }
+    return doc.output("arraybuffer");
+  }
+
+  const repMsg = (t) => { $("repMsg").textContent = t; };
+  function saveError(e) {
+    const c = e && e.code;
+    if (c === "declined") return "Save cancelled.";
+    if (c === "rate_limited") return "A save prompt is already open. Answer it, then try again.";
+    return "Saving isn't available here. Use Copy text instead.";
+  }
+  async function saveReport(kind) {
+    if (!S.dl || !S.report) return;
+    const name = "agency-signal-report-" + dayStr(S.data && S.data.generated_at || Date.now()) + "-" + (S.data.window_days || S.days) + "d";
+    try {
+      let data = S.report;
+      if (kind === "pdf") { data = buildPdf(S.report); if (!data) { repMsg("PDF tools didn't load. Save the Markdown instead."); return; } }
+      repMsg("Waiting for you to confirm the save…");
+      await S.dl.save({ filename: name + (kind === "pdf" ? ".pdf" : ".md"), data });
+      repMsg("Saved.");
+    } catch (e) { repMsg(saveError(e)); }
+  }
+  function openReport() {
+    if (!S.data) return;
+    S.report = buildReport(S.data);
+    $("repPre").textContent = S.report;
+    repMsg(S.report.length.toLocaleString() + " characters · " + (S.report.match(/^### P\d+:/gm) || []).length + " reference posts");
+    const canSave = !!S.dl;
+    $("repMd").hidden = !canSave;
+    $("repPdf").hidden = !canSave || !(window.jspdf && window.jspdf.jsPDF);
+    const dlg = $("rep");
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+  }
+  $("reportBtn").addEventListener("click", openReport);
+  $("repClose").addEventListener("click", () => { const dlg = $("rep"); if (dlg.close) dlg.close(); else dlg.removeAttribute("open"); });
+  $("repMd").addEventListener("click", () => saveReport("md"));
+  $("repPdf").addEventListener("click", () => saveReport("pdf"));
+  $("repCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(S.report); repMsg("Copied. Paste it into any AI chat."); }
+    catch (_) { const r = document.createRange(); r.selectNodeContents($("repPre")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); repMsg("Text selected. Press copy."); }
+  });
 
   // ---------- Controls ----------
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
@@ -702,8 +928,8 @@ code { font-family: var(--font-mono); font-size: 12.5px; background: var(--chip)
   (async () => {
     const c = window.claude;
     if (!c || !c.use) { setState("offline", "Open in Claude"); $("banner").innerHTML = `<div class="note bad">Open this page in Claude to see the data.</div>`; return; }
-    const [mcp, db, user] = await Promise.all([c.use("mcp"), c.use("db"), c.use("user")]);
-    S.mcp = mcp; S.db = db; S.user = user;
+    const [mcp, db, user, dl] = await Promise.all([c.use("mcp"), c.use("db"), c.use("user"), c.use("downloads")]);
+    S.mcp = mcp; S.db = db; S.user = user; S.dl = dl;
     try { S.isOwner = user ? await user.isOwner() : false; } catch (_) { S.isOwner = false; }
     load(S.days);
   })();
