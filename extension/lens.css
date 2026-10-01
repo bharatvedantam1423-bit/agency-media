@@ -1,0 +1,19 @@
+.signal-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 2px; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+.signal-badge { font-size: 12px; font-weight: 600; line-height: 1; padding: 5px 8px; border-radius: 999px; cursor: help; border: 1px solid transparent; white-space: nowrap; }
+.signal-trend { background: #ffe6d6; color: #9a3412; border-color: #fdba74; }
+.signal-next { background: #e0ecff; color: #1d4ed8; border-color: #93c5fd; }
+.signal-good { background: #dcfce7; color: #166534; border-color: #86efac; }
+.signal-weak { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.signal-slop { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.signal-design { background: #f3e8ff; color: #6b21a8; border-color: #d8b4fe; }
+.signal-pending { background: transparent; color: #8b98a5; border-color: #38444d; font-weight: 500; }
+article.signal-dim { opacity: .35; transition: opacity .15s; }
+article.signal-dim:hover { opacity: 1; }
+@media (prefers-color-scheme: dark) {
+  .signal-trend { background: #431407; color: #fdba74; border-color: #9a3412; }
+  .signal-next { background: #172554; color: #93c5fd; border-color: #1d4ed8; }
+  .signal-good { background: #052e16; color: #86efac; border-color: #166534; }
+  .signal-weak { background: #451a03; color: #fcd34d; border-color: #92400e; }
+  .signal-slop { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
+  .signal-design { background: #3b0764; color: #d8b4fe; border-color: #6b21a8; }
+}

@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Agency Signal Lens",
+  "version": "0.2.0",
+  "description": "Labels posts on X, Instagram and Contra (trending, next trend, good, weak, AI slop) using Laya, and auto-scrolls any site in timed sets.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "<all_urls>",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Agency Signal Lens" },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["common.js", "lens-core.js", "x-lens.js"],
+      "css": ["lens.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["common.js", "lens-core.js", "ig-lens.js"],
+      "css": ["lens.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://contra.com/*"],
+      "js": ["common.js", "lens-core.js", "contra-lens.js"],
+      "css": ["lens.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["scroller.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

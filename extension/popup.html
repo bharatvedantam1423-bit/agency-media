@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#fff; --ink:#161a2e; --muted:#5d6479; --line:#e2e5ee; --accent:#2f55e4; --chip:#eef0f6; --ok:#127a4d; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#171b2d; --ink:#e8eaf4; --muted:#9aa1b8; --line:#2a3049; --accent:#7d98ff; --chip:#232840; --ok:#52d19b; --bad:#ff8a80; } }
+  body { margin:0; width:320px; background:var(--bg); color:var(--ink); font:13px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  header { padding:12px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:15px; margin:0; }
+  section { padding:12px 14px; border-bottom:1px solid var(--line); display:grid; gap:8px; }
+  h2 { font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0; }
+  label.row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .grid label { display:grid; gap:3px; color:var(--muted); font-size:12px; }
+  input[type=number] { width:100%; box-sizing:border-box; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:7px; padding:6px 8px; font:inherit; }
+  button { border:1px solid var(--line); background:var(--chip); color:var(--ink); border-radius:8px; padding:8px 10px; font:inherit; font-weight:600; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .buttons { display:flex; gap:8px; }
+  .buttons button { flex:1; }
+  .status { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); }
+  .legend { display:flex; flex-wrap:wrap; gap:4px; font-size:11.5px; color:var(--muted); }
+  a { color:var(--accent); }
+  .msg { font-size:12px; color:var(--muted); min-height:1em; }
+</style>
+</head>
+<body>
+<header><h1>Agency Signal Lens</h1><a href="options.html" target="_blank">Settings</a></header>
+
+<section>
+  <h2>Post labels (X, Instagram, Contra)</h2>
+  <label class="row">Show labels on posts <input type="checkbox" id="lensEnabled"></label>
+  <label class="row">Fade posts not about design <input type="checkbox" id="designOnly"></label>
+  <div class="legend">🔥 Trending · 🚀 Next trend · ✅ Good · ⚠️ Weak · 🤖 AI slop · 🎨 Design</div>
+  <div class="status"><span class="dot" id="layaDot"></span><span id="layaText">Checking Laya…</span></div>
+  <div class="status"><span class="dot" id="syncDot"></span><span id="syncText"></span></div>
+</section>
+
+<section>
+  <h2>Auto-scroll this tab</h2>
+  <div class="grid">
+    <label>Minutes per set<input type="number" id="minutes" min="1" max="240" value="30"></label>
+    <label>Number of sets<input type="number" id="sets" min="1" max="20" value="1"></label>
+    <label>Break between sets (min)<input type="number" id="breakMin" min="0" max="120" value="5"></label>
+    <label>Speed (px per second)<input type="number" id="speed" min="10" max="2000" value="120"></label>
+  </div>
+  <div class="buttons"><button class="primary" id="start">Start</button><button id="stop">Stop</button></div>
+  <div class="msg" id="scrollMsg">Works on any website. Press Esc or click the timer to stop.</div>
+</section>
+
+<script src="popup.js"></script>
+</body>
+</html>

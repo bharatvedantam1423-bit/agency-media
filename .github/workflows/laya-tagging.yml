@@ -1,0 +1,51 @@
+name: Laya tagging
+
+# Reads new posts with Laya (free, CPU) and writes the answers back to Supabase.
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # every 3 hours
+  workflow_dispatch: {}
+
+concurrency:
+  group: laya-tagging
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      # The project URL and publishable key are public by design (they only unlock the token-checked
+      # Laya RPCs), so they live here. Only the worker token is a secret.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://fkmutmzuwexfyqvanmlg.supabase.co' }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'sb_publishable_xHBQh0YS2qcbRZ2mkGBvUg_vi_LoUQv' }}
+      LAYA_WORKER_TOKEN: ${{ secrets.LAYA_WORKER_TOKEN }}
+      MAX_MINUTES: "40"
+      TORCH_DISABLE_NATIVE_JIT: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: worker/requirements.txt
+
+      - name: Cache Laya model files
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: laya-models-v1
+
+      - name: Install Laya (CPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r worker/requirements.txt
+
+      - name: Check the worker token is set
+        run: test -n "$LAYA_WORKER_TOKEN" || { echo "::error::Add the LAYA_WORKER_TOKEN repository secret (see README)"; exit 1; }
+
+      - name: Classify accounts and tag posts
+        run: python worker/laya_worker.py
